@@ -16,6 +16,12 @@ from app.services.receipt_service import ReceiptService
 from app.services.dashboard_service import DashboardService
 from app.services.insights_service import InsightService
 from app.services.chat_service import ChatService
+from app.services.thread_service import ThreadService
+from fastapi import Request
+
+
+def get_expense_agent(request: Request):
+    return request.app.state.expense_agent
 
 
 def get_db() -> Generator[Session, None, None]:
@@ -104,5 +110,12 @@ def get_insight_service(
 
 def get_chat_service(
     db: Session,
+    agent=Depends(get_expense_agent),
 ):
-    return ChatService(db)
+    return ChatService(db, agent)
+
+
+def get_thread_service(
+    db: Session,
+):
+    return ThreadService(db)

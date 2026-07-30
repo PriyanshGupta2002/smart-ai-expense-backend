@@ -60,3 +60,9 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan",
     )
+
+    threads = relationship(
+        "Thread",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )

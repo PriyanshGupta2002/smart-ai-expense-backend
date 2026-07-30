@@ -64,6 +64,7 @@ class ReceiptListItem(BaseModel):
 
     payment_method: str | None
     processing_status: str
+    image_url: str | None
 
 
 class ReceiptListResponse(BaseModel):

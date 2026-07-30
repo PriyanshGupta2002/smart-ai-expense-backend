@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from decimal import Decimal
 
 from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
@@ -10,8 +11,6 @@ from app.utils.date_range import (
     get_period_range,
 )
 
-from decimal import Decimal
-
 
 class DashboardService:
 
@@ -22,6 +21,7 @@ class DashboardService:
         self,
         user: User,
         period: DashboardPeriod,
+        category: str | None = None,
     ):
         start_date, end_date = get_period_range(period)
 
@@ -35,10 +35,16 @@ class DashboardService:
 
         filters.append(Receipt.purchase_datetime < end_date)
 
+        # Optional category filter
+        if category:
+            filters.append(Receipt.expense_type == category)
+
         return filters
 
-    def get_dashboard_summary(self, user: User):
-
+    def get_dashboard_summary(
+        self,
+        user: User,
+    ):
         now = datetime.now(timezone.utc)
 
         current_month_start = datetime(
@@ -49,12 +55,10 @@ class DashboardService:
         )
 
         stmt = select(
-            # All-time spend
             func.coalesce(
                 func.sum(Receipt.total),
                 0,
             ).label("total_spend"),
-            # Current month spend
             func.coalesce(
                 func.sum(
                     case(
@@ -67,9 +71,7 @@ class DashboardService:
                 ),
                 0,
             ).label("current_month_spend"),
-            # All-time transaction count
             func.count(Receipt.id).label("transaction_count"),
-            # All-time average
             func.coalesce(
                 func.avg(Receipt.total),
                 0,
@@ -99,7 +101,12 @@ class DashboardService:
                 func.sum(Receipt.total).label("amount"),
                 func.count(Receipt.id).label("transaction_count"),
             )
-            .where(*self._period_filters(user, period))
+            .where(
+                *self._period_filters(
+                    user=user,
+                    period=period,
+                )
+            )
             .group_by(Receipt.expense_type)
             .order_by(func.sum(Receipt.total).desc())
         )
@@ -111,7 +118,6 @@ class DashboardService:
         categories = []
 
         for row in rows:
-
             amount = row.amount or Decimal("0")
 
             percentage = float(amount / total_spend * 100) if total_spend > 0 else 0
@@ -121,31 +127,48 @@ class DashboardService:
                     "category": row.category or "other",
                     "amount": amount,
                     "transaction_count": row.transaction_count,
-                    "percentage": round(percentage, 2),
+                    "percentage": round(
+                        percentage,
+                        2,
+                    ),
                 }
             )
 
         return {"categories": categories}
 
-    def top_merchants(self, user: User, period: DashboardPeriod):
+    def top_merchants(
+        self,
+        user: User,
+        period: DashboardPeriod,
+        category: str | None = None,
+    ):
         stmt = (
             select(
                 Receipt.merchant_name.label("merchant"),
                 func.sum(Receipt.total).label("amount"),
                 func.count(Receipt.id).label("transaction_count"),
             )
-            .where(*self._period_filters(user, period))
+            .where(
+                *self._period_filters(
+                    user=user,
+                    period=period,
+                    category=category,
+                )
+            )
             .group_by(Receipt.merchant_name)
             .order_by(func.sum(Receipt.total).desc())
             .limit(5)
         )
+
         merchants = self.db.execute(stmt).all()
+
         return {"top_merchants": merchants}
 
     def get_spending_trend(
         self,
         user: User,
         period: DashboardPeriod,
+        category: str | None = None,
     ):
         date_bucket = func.date_trunc(
             "day",
@@ -160,8 +183,9 @@ class DashboardService:
             )
             .where(
                 *self._period_filters(
-                    user,
-                    period,
+                    user=user,
+                    period=period,
+                    category=category,
                 )
             )
             .group_by(date_bucket)

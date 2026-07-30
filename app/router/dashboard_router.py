@@ -37,6 +37,7 @@ def get_category_distribution(
     user=Depends(get_current_user),
     db=Depends(get_db),
     period: DashboardPeriod = DashboardPeriod.THIS_MONTH,
+    category: str | None = None,
 ):
     service = get_dashboard_service(db)
 
@@ -49,12 +50,13 @@ def get_category_distribution(
 )
 def get_top_merchants(
     user=Depends(get_current_user),
+    category: str | None = None,
     db=Depends(get_db),
     period: DashboardPeriod = DashboardPeriod.THIS_MONTH,
 ):
     service = get_dashboard_service(db)
 
-    return service.top_merchants(user=user, period=period)
+    return service.top_merchants(user=user, period=period, category=category)
 
 
 @router.get(
@@ -63,15 +65,13 @@ def get_top_merchants(
 )
 def get_spending_trend(
     period: DashboardPeriod = DashboardPeriod.THIS_MONTH,
+    category: str | None = None,
     user=Depends(get_current_user),
     db=Depends(get_db),
 ):
     service = get_dashboard_service(db)
 
-    return service.get_spending_trend(
-        user=user,
-        period=period,
-    )
+    return service.get_spending_trend(user=user, period=period, category=category)
 
 
 @router.get(

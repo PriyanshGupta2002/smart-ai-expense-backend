@@ -7,6 +7,9 @@ from fastapi import (
     HTTPException,
     UploadFile,
 )
+from uuid import UUID
+
+from sqlalchemy import delete
 
 import math
 from sqlalchemy.orm import Session
@@ -374,3 +377,23 @@ class ReceiptService:
             "total": total,
             "total_pages": math.ceil(total / page_size),
         }
+
+    def delete_receipt(
+        self,
+        user: User,
+        receipt_id: UUID,
+    ) -> bool:
+        stmt = delete(Receipt).where(
+            Receipt.id == receipt_id,
+            Receipt.user_id == user.id,
+        )
+
+        result = self.db.execute(stmt)
+
+        if result.rowcount == 0:
+            self.db.rollback()
+            return False
+
+        self.db.commit()
+
+        return True

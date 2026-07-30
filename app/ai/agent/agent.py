@@ -25,52 +25,39 @@ model = ChatOpenRouter(
 )
 
 
-expense_agent = create_agent(
-    model=model,
-    tools=[
-        list_tables,
-        get_table_schema,
-        get_sample_data,
-        execute_sql,
-    ],
-    context_schema=ExpenseAgentContext,
-    system_prompt=EXPENSE_AGENT_PROMPT,
-    middleware=[
-        # -----------------------------
-        # Tool retries
-        # -----------------------------
-        ToolRetryMiddleware(
-            max_retries=2,
-            backoff_factor=2.0,
-            initial_delay=1.0,
-        ),
-        # -----------------------------
-        # Model/provider retries
-        # -----------------------------
-        ModelRetryMiddleware(
-            max_retries=2,
-            backoff_factor=2.0,
-            initial_delay=1.0,
-        ),
-        # -----------------------------
-        # Prevent excessive tool usage
-        # -----------------------------
-        ToolCallLimitMiddleware(
-            run_limit=10,
-        ),
-        # -----------------------------
-        # Prevent runaway model loops
-        # -----------------------------
-        ModelCallLimitMiddleware(
-            run_limit=8,
-        ),
-        # -----------------------------
-        # Long conversation management
-        # -----------------------------
-        SummarizationMiddleware(
-            model=model,
-            trigger=("tokens", 8000),
-            keep=("messages", 10),
-        ),
-    ],
-)
+def create_expense_agent(checkpointer):
+    return create_agent(
+        model=model,
+        tools=[
+            list_tables,
+            get_table_schema,
+            get_sample_data,
+            execute_sql,
+        ],
+        context_schema=ExpenseAgentContext,
+        system_prompt=EXPENSE_AGENT_PROMPT,
+        checkpointer=checkpointer,
+        middleware=[
+            ToolRetryMiddleware(
+                max_retries=2,
+                backoff_factor=2.0,
+                initial_delay=1.0,
+            ),
+            ModelRetryMiddleware(
+                max_retries=2,
+                backoff_factor=2.0,
+                initial_delay=1.0,
+            ),
+            ToolCallLimitMiddleware(
+                run_limit=10,
+            ),
+            ModelCallLimitMiddleware(
+                run_limit=8,
+            ),
+            SummarizationMiddleware(
+                model=model,
+                trigger=("tokens", 8000),
+                keep=("messages", 10),
+            ),
+        ],
+    )
