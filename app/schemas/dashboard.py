@@ -5,10 +5,10 @@ from typing import Literal
 
 
 class DashboardSummaryResponse(BaseModel):
-    total_spend: int
+    total_spend: Decimal
     transaction_count: int
-    current_month_spend: int
-    average_transaction: int
+    current_month_spend: Decimal
+    average_transaction: Decimal
     model_config = ConfigDict(from_attributes=True)
 
 

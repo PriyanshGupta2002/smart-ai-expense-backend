@@ -2,6 +2,7 @@ from langchain_openrouter import ChatOpenRouter
 from dotenv import load_dotenv
 from app.ai.receipt.schemas import ReceiptExtraction
 from app.ai.receipt.state import ReceiptState
+from app.ai.prompts.prompt import RECEIPT_EXTRACTION_PROMPT
 
 load_dotenv()
 
@@ -11,29 +12,43 @@ extractor = ChatOpenRouter(model="openai/gpt-5-mini").with_structured_output(
 )
 
 
-def extraction_node(
-    state: ReceiptState,
-):
+def extraction_node(state: ReceiptState):
 
-    receipt = extractor.invoke(f"""
-You extract structured information from receipts and invoices.
+    layout_text = state["layout_text"]
+    ocr_text = state["ocr_text"]
 
-Use only information supported by the supplied OCR.
+    result = extractor.invoke(
+        [
+            {
+                "role": "system",
+                "content": RECEIPT_EXTRACTION_PROMPT,
+            },
+            {
+                "role": "user",
+                "content": f"""
+Extract the complete receipt/invoice below.
 
 IMPORTANT:
-- Do not fabricate missing values.
-- A product name may span multiple physical lines.
-- Do not treat every OCR line as a separate item.
-- Use the reconstructed row/layout information to determine
-  whether text continues the previous item.
-- Tax shown on a receipt may already be included in item prices.
-- total means the final amount payable.
+- This document may contain multiple pages.
+- Treat all pages as ONE document.
+- Read every page before producing the result.
+- Information may continue from one page to another.
+- Items may appear on multiple pages.
+- Combine items from ALL pages.
+- Totals may appear only on the final page.
+- Do not stop extraction after PAGE 1.
+- Do not fabricate missing information.
+
+LAYOUT-AWARE DOCUMENT:
+
+{layout_text}
 
 RAW OCR:
-{state["ocr_text"]}
 
-RECONSTRUCTED LAYOUT:
-{state["layout_text"]}
-""")
+{ocr_text}
+""",
+            },
+        ]
+    )
 
-    return {"extracted_receipt": receipt}
+    return {"extracted_receipt": result}

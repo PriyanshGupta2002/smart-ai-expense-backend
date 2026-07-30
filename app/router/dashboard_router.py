@@ -1,10 +1,4 @@
-from fastapi import (
-    APIRouter,
-    Depends,
-    Request,
-    Response,
-    status,
-)
+from fastapi import APIRouter, Depends
 from app.core.dependencies import (
     get_current_user,
     get_dashboard_service,

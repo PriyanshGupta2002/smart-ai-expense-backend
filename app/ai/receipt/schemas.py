@@ -5,13 +5,14 @@ from pydantic import BaseModel, Field
 
 
 class OCRBlock(BaseModel):
-    text: str = Field(description="Text recognized from this region.")
 
-    confidence: float = Field(ge=0, le=1, description="OCR recognition confidence.")
+    text: str
 
-    bbox: list[list[float]] = Field(
-        description="Bounding polygon of the recognized text."
-    )
+    confidence: float
+
+    bbox: list[list[float]]
+
+    page: int = 1
 
 
 class LayoutBlock(BaseModel):
@@ -106,7 +107,7 @@ class ReceiptExtraction(BaseModel):
 class Classification(BaseModel):
     expense_type: Literal[
         "groceries",
-        "restaurant",
+        "food_dining",
         "shopping",
         "fuel",
         "travel",
@@ -115,8 +116,30 @@ class Classification(BaseModel):
         "entertainment",
         "utilities",
         "education",
+        "home_services",
+        "personal_care",
+        "transportation",
+        "subscriptions",
         "other",
     ]
+
+    subcategory: str | None = Field(
+        default=None,
+        description=(
+            "A concise semantic subcategory describing the "
+            "actual expense, such as 'AC service', "
+            "'electricity bill', 'medicines', 'cab ride', "
+            "'mobile recharge', or 'restaurant dining'."
+        ),
+    )
+
+    tags: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Short semantic labels useful for finding this "
+            "expense from natural-language queries."
+        ),
+    )
 
     confidence: float = Field(
         ge=0,

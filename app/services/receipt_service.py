@@ -19,11 +19,7 @@ from app.services.imagekit_service import ImageKitService
 from app.utils.date_range import DashboardPeriod, get_period_range
 from app.services.insight_cache_service import InsightCacheService
 
-ALLOWED_CONTENT_TYPES = {
-    "image/jpeg",
-    "image/png",
-    "image/webp",
-}
+ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp", "application/pdf"}
 
 MAX_FILE_SIZE = 10 * 1024 * 1024
 
@@ -133,7 +129,9 @@ class ReceiptService:
 
             result = workflow.invoke(
                 {
-                    "image_path": temp_path,
+                    "file_path": temp_path,
+                    "content_type": file.content_type,
+                    "image_paths": [],
                     "retry_count": 0,
                     "max_retries": 3,
                     "warnings": [],

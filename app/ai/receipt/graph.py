@@ -9,8 +9,14 @@ from app.ai.nodes.validation_node import validation_node
 from app.ai.nodes.retry_node import retry_extraction, retry_ocr
 from app.ai.nodes.insert_to_db_node import insert_to_db_node
 from app.ai.nodes.route_after_validation_node import route_after_validation
+from app.ai.nodes.file_preparation_node import file_preparation_node
 
 graph = StateGraph(ReceiptState)
+
+graph.add_node(
+    "file_preparation",
+    file_preparation_node,
+)
 
 graph.add_node("ocr_node", ocr_node)
 graph.add_node(
@@ -26,7 +32,8 @@ graph.add_node("retry_extraction", retry_extraction)
 graph.add_node("insert_to_db_node", insert_to_db_node)
 
 
-graph.add_edge(START, "ocr_node")
+graph.add_edge(START, "file_preparation")
+graph.add_edge("file_preparation", "ocr_node")
 graph.add_edge("ocr_node", "layout")
 graph.add_edge("layout", "extraction_node")
 graph.add_edge("extraction_node", "classification_node")
