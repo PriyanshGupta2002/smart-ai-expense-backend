@@ -16,7 +16,10 @@ from app.core.dependencies import (
     get_thread_service,
     get_db,
     get_expense_agent,
+    get_storage_service,
 )
+
+from app.services.storage_service import StorageService
 
 router = APIRouter(
     prefix="/chat",
@@ -31,6 +34,7 @@ def chat(
     user=Depends(get_current_user),
     db=Depends(get_db),
     agent=Depends(get_expense_agent),
+    storage: StorageService = Depends(get_storage_service),
 ):
     thread_service = get_thread_service(db=db)
 
@@ -45,7 +49,7 @@ def chat(
             detail="Thread not found",
         )
 
-    service = get_chat_service(db=db, agent=agent)
+    service = get_chat_service(db=db, agent=agent, storage=storage)
 
     return StreamingResponse(
         service.stream_chat(

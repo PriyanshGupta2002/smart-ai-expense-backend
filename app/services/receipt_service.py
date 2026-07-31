@@ -2,7 +2,8 @@ import os
 import tempfile
 
 from decimal import Decimal
-
+import mimetypes
+import urllib.request
 from fastapi import (
     HTTPException,
     UploadFile,
@@ -44,7 +45,7 @@ class ReceiptService:
 
         self.imagekit = ImageKitService()
 
-    def process_receipt(
+    def upload_receipt(
         self,
         file: UploadFile,
         user: User,
@@ -57,7 +58,7 @@ class ReceiptService:
         if file.content_type not in ALLOWED_CONTENT_TYPES:
             raise HTTPException(
                 status_code=415,
-                detail="Unsupported image type",
+                detail="Unsupported file type",
             )
 
         original_filename = file.filename or "receipt.jpg"
@@ -66,10 +67,8 @@ class ReceiptService:
 
         temp_path = None
         imagekit_result = None
-        receipt = None
 
         try:
-
             # =====================================
             # Temporary file
             # =====================================
@@ -94,13 +93,13 @@ class ReceiptService:
                     if size > MAX_FILE_SIZE:
                         raise HTTPException(
                             status_code=413,
-                            detail="Image exceeds 10 MB",
+                            detail="File exceeds 10 MB",
                         )
 
                     temp.write(chunk)
 
             # =====================================
-            # ImageKit
+            # Upload to ImageKit
             # =====================================
 
             imagekit_result = self.imagekit.upload_receipt(
@@ -110,21 +109,124 @@ class ReceiptService:
             )
 
             # =====================================
-            # Create processing receipt
+            # Create queued receipt
             # =====================================
 
             receipt = Receipt(
                 user_id=user.id,
-                imagekit_file_id=(imagekit_result.file_id),
-                image_url=(imagekit_result.url),
-                image_path=(imagekit_result.file_path),
+                imagekit_file_id=imagekit_result.file_id,
+                image_url=imagekit_result.url,
+                image_path=imagekit_result.file_path,
                 original_filename=original_filename,
-                processing_status="PROCESSING",
+                # IMPORTANT
+                processing_status="PENDING",
             )
 
             self.db.add(receipt)
             self.db.commit()
             self.db.refresh(receipt)
+
+            return receipt
+
+        except HTTPException:
+            self.db.rollback()
+
+            if imagekit_result is not None:
+                try:
+                    self.imagekit.delete_file(imagekit_result.file_id)
+                except Exception:
+                    pass
+
+            raise
+
+        except Exception:
+            self.db.rollback()
+
+            if imagekit_result is not None:
+                try:
+                    self.imagekit.delete_file(imagekit_result.file_id)
+                except Exception:
+                    pass
+
+            raise HTTPException(
+                status_code=500,
+                detail="Receipt upload failed",
+            )
+
+        finally:
+            if temp_path and os.path.exists(temp_path):
+                os.remove(temp_path)
+
+    def process_receipt_background(
+        self,
+        receipt_id: UUID,
+    ) -> Receipt:
+
+        receipt = self.db.get(
+            Receipt,
+            receipt_id,
+        )
+
+        if receipt is None:
+            raise ValueError(f"Receipt {receipt_id} not found")
+
+        # Prevent accidentally processing something
+        # that has already finished.
+        if receipt.processing_status in {
+            "COMPLETED",
+            "NEEDS_REVIEW",
+        }:
+            return receipt
+
+        temp_path = None
+
+        try:
+            # =====================================
+            # Processing
+            # =====================================
+
+            receipt.processing_status = "PROCESSING"
+            receipt.processing_error = None
+
+            self.db.commit()
+
+            # =====================================
+            # Determine extension
+            # =====================================
+
+            original_filename = receipt.original_filename or "receipt"
+
+            extension = os.path.splitext(original_filename)[1].lower()
+
+            if not extension:
+                extension = ".jpg"
+
+            # =====================================
+            # Download ImageKit file
+            # =====================================
+
+            with tempfile.NamedTemporaryFile(
+                delete=False,
+                suffix=extension,
+            ) as temp:
+
+                temp_path = temp.name
+
+            urllib.request.urlretrieve(
+                receipt.image_url,
+                temp_path,
+            )
+
+            # =====================================
+            # Content type
+            # =====================================
+
+            content_type, _ = mimetypes.guess_type(original_filename)
+
+            if content_type not in ALLOWED_CONTENT_TYPES:
+                content_type = (
+                    "application/pdf" if extension == ".pdf" else "image/jpeg"
+                )
 
             # =====================================
             # AI Workflow
@@ -133,7 +235,7 @@ class ReceiptService:
             result = workflow.invoke(
                 {
                     "file_path": temp_path,
-                    "content_type": file.content_type,
+                    "content_type": content_type,
                     "image_paths": [],
                     "retry_count": 0,
                     "max_retries": 3,
@@ -200,7 +302,6 @@ class ReceiptService:
             # =====================================
 
             if classification:
-
                 receipt.expense_type = classification.expense_type
 
                 receipt.classification_confidence = to_decimal(
@@ -212,10 +313,20 @@ class ReceiptService:
             # =====================================
 
             if validation:
-
                 receipt.validation_status = validation.status
 
                 receipt.validation_confidence = to_decimal(validation.confidence_score)
+
+            # =====================================
+            # Delete old items
+            #
+            # Important because Celery can retry.
+            # Otherwise a retry could duplicate items.
+            # =====================================
+
+            self.db.execute(
+                delete(ReceiptItem).where(ReceiptItem.receipt_id == receipt.id)
+            )
 
             # =====================================
             # Items
@@ -234,7 +345,7 @@ class ReceiptService:
                 self.db.add(db_item)
 
             # =====================================
-            # Status
+            # Final status
             # =====================================
 
             if validation and validation.status == "NEEDS_REVIEW":
@@ -243,52 +354,37 @@ class ReceiptService:
             else:
                 receipt.processing_status = "COMPLETED"
 
+            receipt.processing_error = None
+
             self.db.commit()
             self.db.refresh(receipt)
-            InsightCacheService.invalidate(user_id=user.id)
+
+            # =====================================
+            # Dashboard cache
+            # =====================================
+
+            InsightCacheService.invalidate(user_id=receipt.user_id)
 
             return receipt
-
-        except HTTPException:
-            self.db.rollback()
-
-            if imagekit_result is not None and receipt is None:
-                try:
-                    self.imagekit.delete_file(imagekit_result.file_id)
-                except Exception:
-                    pass
-
-            raise
 
         except Exception as exc:
 
             self.db.rollback()
 
-            # Receipt exists → preserve it
-            # and mark processing failure.
+            # Reload because rollback expires/reverts
+            # the current transaction state.
+            receipt = self.db.get(
+                Receipt,
+                receipt_id,
+            )
 
             if receipt is not None:
-
                 receipt.processing_status = "FAILED"
                 receipt.processing_error = str(exc)
 
-                self.db.add(receipt)
                 self.db.commit()
 
-            # Upload succeeded but DB receipt
-            # wasn't created → clean ImageKit.
-
-            elif imagekit_result is not None:
-
-                try:
-                    self.imagekit.delete_file(imagekit_result.file_id)
-                except Exception:
-                    pass
-
-            raise HTTPException(
-                status_code=500,
-                detail="Receipt processing failed",
-            )
+            raise
 
         finally:
 

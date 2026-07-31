@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     COOKIE_SECURE: bool = False
     IMAGEKIT_PRIVATE_KEY: str
     IMAGEKIT_URL_ENDPOINT: str
+    IMAGEKIT_PUBLIC_KEY: str
     REDIS_URL: str
 
     model_config = SettingsConfigDict(

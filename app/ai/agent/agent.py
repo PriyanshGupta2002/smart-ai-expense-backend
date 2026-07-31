@@ -17,6 +17,7 @@ from app.ai.agent.tools import (
     get_table_schema,
     get_sample_data,
     execute_sql,
+    export_expenses,
 )
 
 model = ChatOpenRouter(
@@ -33,6 +34,7 @@ def create_expense_agent(checkpointer):
             get_table_schema,
             get_sample_data,
             execute_sql,
+            export_expenses,
         ],
         context_schema=ExpenseAgentContext,
         system_prompt=EXPENSE_AGENT_PROMPT,

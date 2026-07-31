@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, File, UploadFile, Query, status, HTTPException
 from uuid import UUID
 from app.core.dependencies import get_current_user, get_receipt_service, get_db
-
+from app.tasks.receipt_tasks import process_receipt_task
 
 from app.models.user import User
 
@@ -19,18 +19,25 @@ router = APIRouter(
 
 
 @router.post(
-    "/upload",
+    "",
     response_model=ReceiptResponse,
+    status_code=status.HTTP_202_ACCEPTED,
 )
 def upload_receipt(
-    file: UploadFile = File(...),
-    current_user: User = Depends(get_current_user),
-    receipt_service: ReceiptService = Depends(get_receipt_service),
+    file: UploadFile,
+    user=Depends(get_current_user),
+    db=Depends(get_db),
 ):
-    return receipt_service.process_receipt(
+    service = ReceiptService(db=db)
+
+    receipt = service.upload_receipt(
         file=file,
-        user=current_user,
+        user=user,
     )
+
+    process_receipt_task.delay(str(receipt.id))
+
+    return receipt
 
 
 @router.get(

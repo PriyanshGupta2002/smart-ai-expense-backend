@@ -10,6 +10,7 @@ import uuid
 import jwt
 from fastapi import Depends
 from sqlalchemy.orm import Session
+from functools import lru_cache
 
 from app.services.auth_service import AuthService
 from app.services.receipt_service import ReceiptService
@@ -18,10 +19,25 @@ from app.services.insights_service import InsightService
 from app.services.chat_service import ChatService
 from app.services.thread_service import ThreadService
 from fastapi import Request
+from app.services.storage_service import StorageService
+from app.core.config import settings
+from imagekitio import ImageKit
+
+
+@lru_cache
+def _get_imagekit_client() -> ImageKit:
+    return ImageKit(
+        private_key=settings.IMAGEKIT_PRIVATE_KEY,
+    )
 
 
 def get_expense_agent(request: Request):
     return request.app.state.expense_agent
+
+
+def get_storage_service() -> StorageService:
+    imagekit_client = _get_imagekit_client()
+    return StorageService(imagekit=imagekit_client)
 
 
 def get_db() -> Generator[Session, None, None]:
@@ -109,10 +125,9 @@ def get_insight_service(
 
 
 def get_chat_service(
-    db: Session,
-    agent=Depends(get_expense_agent),
+    db: Session, agent=Depends(get_expense_agent), storage=Depends(get_storage_service)
 ):
-    return ChatService(db, agent)
+    return ChatService(db, agent, storage)
 
 
 def get_thread_service(

@@ -1,10 +1,12 @@
 import json
+import logging
+from typing import Any
 
 from langchain_core.messages import (
     AIMessageChunk,
     HumanMessage,
+    ToolMessage,
 )
-
 
 from app.ai.agent.context import ExpenseAgentContext
 
@@ -12,20 +14,32 @@ from app.models.message import Message
 from app.models.thread import Thread
 from app.models.user import User
 
-import logging
-
 logger = logging.getLogger(__name__)
 
 
 class ChatService:
 
-    def __init__(self, db, agent):
+    def __init__(
+        self,
+        db,
+        agent,
+        storage,
+    ):
         self.db = db
         self.agent = agent
+        self.storage = storage
+
+    # =========================================================
+    # SSE
+    # =========================================================
 
     @staticmethod
     def _event(data: dict) -> str:
         return f"data: {json.dumps(data)}\n\n"
+
+    # =========================================================
+    # Thread title
+    # =========================================================
 
     @staticmethod
     def _create_thread_title(
@@ -42,29 +56,84 @@ class ChatService:
 
         return title[: max_length - 3].rstrip() + "..."
 
+    # =========================================================
+    # Tool result parsing
+    # =========================================================
+
+    @staticmethod
+    def _parse_tool_result(
+        message: ToolMessage,
+    ) -> dict[str, Any] | None:
+        """
+        Convert ToolMessage content into a dictionary.
+
+        Tool results may arrive as:
+        - a JSON string
+        - a dict
+        """
+
+        content = message.content
+
+        if isinstance(content, dict):
+            return content
+
+        if isinstance(content, str):
+            try:
+                result = json.loads(content)
+
+                if isinstance(result, dict):
+                    return result
+
+            except json.JSONDecodeError:
+                return None
+
+        return None
+
+    # =========================================================
+    # Chat stream
+    # =========================================================
+
     def stream_chat(
         self,
         user: User,
         thread: Thread,
         message: str,
     ):
+        # -----------------------------------------------------
+        # Save user message
+        # -----------------------------------------------------
+
         user_message = Message(
             thread_id=thread.id,
             role="user",
             content=message,
+            artifacts=[],
         )
 
         self.db.add(user_message)
+
+        # -----------------------------------------------------
+        # Generate initial thread title
+        # -----------------------------------------------------
 
         if thread.title is None:
             thread.title = self._create_thread_title(message)
 
         self.db.commit()
 
+        # -----------------------------------------------------
+        # Agent context
+        # -----------------------------------------------------
+
         context: ExpenseAgentContext = {
             "db": self.db,
             "user_id": user.id,
+            "storage": self.storage,
         }
+
+        # -----------------------------------------------------
+        # LangGraph thread
+        # -----------------------------------------------------
 
         config = {
             "configurable": {
@@ -72,9 +141,19 @@ class ChatService:
             }
         }
 
+        # -----------------------------------------------------
+        # Response state
+        # -----------------------------------------------------
+
         complete_response = ""
 
+        # Artifacts generated during THIS assistant response.
+        artifacts: list[dict[str, Any]] = []
+
         try:
+            # =================================================
+            # Agent stream
+            # =================================================
 
             for chunk in self.agent.stream(
                 {"messages": [HumanMessage(content=message)]},
@@ -84,18 +163,71 @@ class ChatService:
             ):
                 message_chunk, metadata = chunk
 
+                # =============================================
+                # TOOL RESULT
+                # =============================================
+
+                if isinstance(
+                    message_chunk,
+                    ToolMessage,
+                ):
+                    self._handle_tool_message(message_chunk)
+
+                    result = self._parse_tool_result(message_chunk)
+
+                    if not result:
+                        continue
+
+                    artifact = result.get("artifact")
+
+                    if not artifact:
+                        continue
+
+                    if not isinstance(artifact, dict):
+                        continue
+
+                    # -----------------------------------------
+                    # Store artifact for DB persistence
+                    # -----------------------------------------
+
+                    artifacts.append(artifact)
+
+                    # -----------------------------------------
+                    # Send artifact immediately to frontend
+                    # -----------------------------------------
+
+                    yield self._event(
+                        {
+                            "type": "artifact",
+                            "artifact": artifact,
+                        }
+                    )
+
+                    continue
+
+                # =============================================
+                # AI TOKEN
+                # =============================================
+
                 if not isinstance(
                     message_chunk,
                     AIMessageChunk,
                 ):
                     continue
 
+                # Don't send tool-call chunks to frontend.
                 if message_chunk.tool_calls:
                     continue
 
                 content = message_chunk.content
 
-                if not content or not isinstance(content, str):
+                if not content:
+                    continue
+
+                if not isinstance(
+                    content,
+                    str,
+                ):
                     continue
 
                 complete_response += content
@@ -107,19 +239,39 @@ class ChatService:
                     }
                 )
 
-            if complete_response:
+            # =================================================
+            # Save assistant message
+            # =================================================
 
+            # Save if there is either:
+            #
+            # 1. assistant text
+            # 2. generated artifacts
+            #
+            # This also handles a response containing only
+            # a downloadable file.
+
+            if complete_response or artifacts:
                 assistant_message = Message(
                     thread_id=thread.id,
                     role="assistant",
                     content=complete_response,
+                    artifacts=artifacts,
                 )
 
                 self.db.add(assistant_message)
 
                 self.db.commit()
 
-            yield self._event({"type": "done"})
+            # =================================================
+            # Finished
+            # =================================================
+
+            yield self._event(
+                {
+                    "type": "done",
+                }
+            )
 
         except Exception:
             self.db.rollback()
@@ -138,3 +290,25 @@ class ChatService:
                     "message": "Unable to generate response.",
                 }
             )
+
+    # =========================================================
+    # Tool logging
+    # =========================================================
+
+    @staticmethod
+    def _handle_tool_message(
+        message: ToolMessage,
+    ) -> None:
+        """
+        Log completed tool calls.
+
+        Useful while debugging agent behaviour.
+        """
+
+        logger.debug(
+            "Agent tool completed",
+            extra={
+                "tool_name": message.name,
+                "tool_call_id": (message.tool_call_id),
+            },
+        )

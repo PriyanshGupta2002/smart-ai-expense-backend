@@ -7,7 +7,7 @@ from sqlalchemy import (
     Text,
     func,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -20,6 +20,11 @@ class Message(Base):
         UUID(as_uuid=True),
         primary_key=True,
         default=uuid.uuid4,
+    )
+    artifacts = mapped_column(
+        JSONB,
+        nullable=False,
+        default=list,
     )
 
     thread_id: Mapped[uuid.UUID] = mapped_column(
