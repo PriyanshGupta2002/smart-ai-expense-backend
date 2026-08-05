@@ -1,6 +1,22 @@
 from sqlalchemy import text
 from langchain.tools import tool, ToolRuntime
-from app.ai.agent.context import ExpenseAgentContext, ALLOWED_TABLES
+
+from app.ai.agent.context import (
+    ALLOWED_TABLES,
+    ExpenseAgentContext,
+)
+
+TABLE_USER_FILTERS = {
+    "receipts": "user_id = :user_id",
+    "budgets": "user_id = :user_id",
+    "receipt_items": """
+        receipt_id IN (
+            SELECT id
+            FROM receipts
+            WHERE user_id = :user_id
+        )
+    """,
+}
 
 
 @tool
@@ -10,71 +26,36 @@ def get_sample_data(
     limit: int = 3,
 ) -> list[dict]:
     """
-    Return a few sample rows from an allowed expense table.
-
-    Use this only when you need to understand how values
-    are represented in the database.
-
-    Do not call this tool if the schema already provides
-    enough information.
+    Return a few sample rows from an allowed table.
     """
 
     if table_name not in ALLOWED_TABLES:
         return [{"error": f"Table '{table_name}' is not available."}]
 
-    limit = max(
-        1,
-        min(limit, 5),
+    where_clause = TABLE_USER_FILTERS.get(table_name)
+
+    if where_clause is None:
+        return [{"error": f"No access rule configured for '{table_name}'."}]
+
+    limit = max(1, min(limit, 5))
+
+    query = text(f"""
+        SELECT *
+        FROM {table_name}
+        WHERE {where_clause}
+        LIMIT :limit
+        """)
+
+    rows = (
+        runtime.context.db.execute(
+            query,
+            {
+                "user_id": runtime.context.user_id,
+                "limit": limit,
+            },
+        )
+        .mappings()
+        .all()
     )
-
-    db = runtime.context.db
-    user_id = runtime.context.user_id
-
-    if table_name == "receipts":
-
-        query = text("""
-            SELECT *
-            FROM receipts
-            WHERE user_id = :user_id
-            LIMIT :limit
-        """)
-
-        rows = (
-            db.execute(
-                query,
-                {
-                    "user_id": user_id,
-                    "limit": limit,
-                },
-            )
-            .mappings()
-            .all()
-        )
-
-    elif table_name == "receipt_items":
-
-        query = text("""
-            SELECT ri.*
-            FROM receipt_items ri
-            JOIN receipts r
-                ON r.id = ri.receipt_id
-            WHERE r.user_id = :user_id
-            LIMIT :limit
-        """)
-
-        rows = (
-            db.execute(
-                query,
-                {
-                    "user_id": user_id,
-                    "limit": limit,
-                },
-            )
-            .mappings()
-            .all()
-        )
-
-    else:
-        return []
 
     return [dict(row) for row in rows]

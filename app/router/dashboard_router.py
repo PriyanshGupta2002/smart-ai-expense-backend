@@ -11,6 +11,7 @@ from app.schemas.dashboard import (
     TopMerchantResponse,
     SpendingTrendResponse,
     DashboardInsightsResponse,
+    MeResponse,
 )
 from app.utils.date_range import DashboardPeriod
 
@@ -27,6 +28,16 @@ def get_dashboard_summary(user=Depends(get_current_user), db=Depends(get_db)):
     dashboard_service = get_dashboard_service(db=db)
     data = dashboard_service.get_dashboard_summary(user=user)
     return DashboardSummaryResponse(**data)
+
+
+@router.get(
+    "/me",
+    response_model=MeResponse,
+)
+def get_me(user=Depends(get_current_user), db=Depends(get_db)):
+    dashboard_service = get_dashboard_service(db=db)
+    data = dashboard_service.get_me(user=user)
+    return MeResponse(**data)
 
 
 @router.get(

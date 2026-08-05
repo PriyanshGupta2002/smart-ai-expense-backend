@@ -24,6 +24,9 @@ model = ChatOpenRouter(
     model="openai/gpt-5-mini",
     temperature=0,
 )
+summary_model = ChatOpenRouter(
+    model="openai/gpt-5-nano",
+)
 
 
 def create_expense_agent(checkpointer):
@@ -57,8 +60,8 @@ def create_expense_agent(checkpointer):
                 run_limit=8,
             ),
             SummarizationMiddleware(
-                model=model,
-                trigger=("tokens", 8000),
+                model=summary_model,
+                trigger=("tokens", 40000),
                 keep=("messages", 10),
             ),
         ],

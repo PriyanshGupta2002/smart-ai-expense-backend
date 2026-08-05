@@ -9,6 +9,7 @@ from app.core.checkpointer import get_checkpointer
 from app.ai.agent.agent import create_expense_agent
 from contextlib import asynccontextmanager
 from app.router.thread_router import router as ThreadRouter
+from app.router.budget_router import router as BudgetRouter
 
 APP_DIR = Path(__file__).resolve().parent
 
@@ -55,6 +56,7 @@ app.add_middleware(
 )
 
 app.include_router(AuthRouter)
+app.include_router(BudgetRouter)
 app.include_router(ReceiptRouter)
 app.include_router(DashboardRouter)
 app.include_router(ChatRouter)

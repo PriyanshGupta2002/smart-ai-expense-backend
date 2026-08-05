@@ -73,3 +73,10 @@ class DashboardInsightsResponse(BaseModel):
     spending_change: SpendingChangeInsight
     top_category: TopCategoryInsight | None
     top_merchant: TopMerchantInsight | None
+
+
+class MeResponse(BaseModel):
+    first_name: str
+    last_name: str
+    email: str
+    model_config = ConfigDict(from_attributes=True)

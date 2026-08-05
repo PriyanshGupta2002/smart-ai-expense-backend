@@ -6,6 +6,7 @@ from fastapi import (
     HTTPException,
 )
 from fastapi.responses import StreamingResponse
+from app.core.dependencies import get_scope_classifier
 
 
 from app.schemas.chat import ChatRequest
@@ -35,6 +36,7 @@ def chat(
     db=Depends(get_db),
     agent=Depends(get_expense_agent),
     storage: StorageService = Depends(get_storage_service),
+    classifier=Depends(get_scope_classifier),
 ):
     thread_service = get_thread_service(db=db)
 
@@ -49,7 +51,9 @@ def chat(
             detail="Thread not found",
         )
 
-    service = get_chat_service(db=db, agent=agent, storage=storage)
+    service = get_chat_service(
+        db=db, agent=agent, storage=storage, classifier=classifier
+    )
 
     return StreamingResponse(
         service.stream_chat(

@@ -46,43 +46,149 @@ Rules:
 
 
 RECEIPT_EXTRACTION_PROMPT = """
-You are an expert receipt and invoice extraction system.
+You are an expert receipt extraction system.
 
-Extract structured receipt information from OCR and
-layout-aware document data.
+Your task is to extract structured information from retail receipts.
 
-The input may contain ONE OR MULTIPLE PAGES.
+The OCR text comes from a receipt and may contain OCR mistakes.
 
-MULTI-PAGE RULES:
+Guidelines:
 
-1. Treat all pages as a single receipt/invoice.
+1. Extract the merchant name.
 
-2. You MUST inspect every page before producing the final
-   structured output.
+2. Extract the purchase date and time if present.
 
-3. PAGE markers such as:
-   --- PAGE 1 ---
-   --- PAGE 2 ---
-   indicate page boundaries, not separate receipts.
+3. Extract every purchased item.
 
-4. Items may continue onto subsequent pages.
+4. For each item extract:
+   - name
+   - quantity
+   - unit price (if available)
+   - total price
+   - category if it can be inferred
 
-5. Combine line items from all pages into one items array.
+5. Extract:
+   - subtotal
+   - discounts
+   - taxes
+   - service charges
+   - grand total
 
-6. Merchant information may appear only on the first page.
+6. Extract the payment method if available.
 
-7. Totals, taxes, discounts and payment information may
-   appear only on the final page.
+7. Extract the receipt currency.
 
-8. Do not assume PAGE 1 contains the complete document.
+8. Ignore:
+   - advertisements
+   - loyalty messages
+   - return policies
+   - footer messages
+   - QR codes
+   - barcodes
 
-9. Do not duplicate repeated headers, merchant information,
-   page numbers, or footer information as receipt items.
+9. Never invent missing information.
 
-10. Never fabricate information that is not supported by
-    the document.
+10. If a value cannot be determined, return null.
+
+The document may contain multiple pages.
+
+Treat all pages as one receipt.
+
+Combine all purchased items into one list.
 """
 
+
+INVOICE_EXTRACTION_PROMPT = """
+You are an expert invoice extraction system.
+
+The document has already been layout parsed and converted into Markdown.
+
+The Markdown preserves:
+
+- reading order
+- tables
+- merged cells
+- document hierarchy
+
+Use the Markdown as the PRIMARY source.
+
+Use OCR text only if some information is missing.
+
+Extract:
+
+Invoice Information
+
+- invoice number
+- invoice date
+- due date
+- purchase order number
+- reference number
+
+Merchant Information
+
+- merchant name
+- GSTIN/VAT number
+- address
+- phone
+- email
+
+Customer Information
+
+- customer name
+- customer GSTIN if present
+- billing address
+- shipping address
+
+Items
+
+Extract EVERY line item.
+
+For every item extract:
+
+- description
+- quantity
+- unit
+- unit price
+- tax
+- discount
+- total amount
+
+Financial Information
+
+Extract:
+
+- subtotal
+- CGST
+- SGST
+- IGST
+- VAT
+- discounts
+- shipping
+- grand total
+- currency
+
+Important
+
+1. Preserve every row in the item table.
+
+2. Never merge different products.
+
+3. Ignore page numbers.
+
+4. Ignore signatures.
+
+5. Ignore logos.
+
+6. Ignore decorative images.
+
+7. Never hallucinate values.
+
+8. Return null when information is unavailable.
+
+The document may contain multiple pages.
+
+Treat every page as one invoice.
+"""
 
 CLASSIFICATION_SYSTEM_PROMPT = """
 You are an expense classification system for a personal expense tracker.
@@ -199,4 +305,133 @@ Treat the receipt as the complete source of truth.
 
 Extracted receipt:
 {receipt}
+"""
+
+SCOPE_CLASSIFIER_SYSTEM_PROMPT = """
+You are an intent classifier for Expense AI.
+
+You are given the recent conversation history.
+
+Your task is to classify ONLY the FINAL user message while considering the previous conversation for context.
+
+A message that appears unrelated on its own may actually be answering a previous question from the assistant.
+
+Expense AI helps users understand and manage their personal finances based on their receipts, expenses, budgets, and spending history.
+
+Return EXPENSE if the final user message is related to:
+
+- receipts
+- expenses
+- transactions
+- merchants
+- purchased items
+- categories
+- payment methods
+- spending analytics
+- financial summaries
+- exporting reports
+- uploaded receipt files
+- budgets
+- saving money
+- spending habits
+- financial insights
+- cost-cutting suggestions
+- budget recommendations
+- spending trends
+- monthly or yearly comparisons
+- financial planning
+- follow-up answers to expense-related conversations
+
+If the message can reasonably be answered by analyzing the user's expense data or helping them manage their finances, return EXPENSE.
+
+Return OUT_OF_SCOPE only if the conversation is clearly unrelated to expense management or personal finance.
+
+Examples
+
+Conversation:
+User: What did I spend this month?
+
+Final user message:
+What about last month?
+
+→ EXPENSE
+
+----------------------------
+
+Conversation:
+User: Create me a monthly budget.
+Assistant: What is your monthly income?
+
+Final user message:
+90,000
+
+→ EXPENSE
+
+----------------------------
+
+Conversation:
+User: How can I save money?
+Assistant: What is your largest monthly expense?
+
+Final user message:
+Around ₹20,000 on rent.
+
+→ EXPENSE
+
+----------------------------
+
+Conversation:
+User: Export my expenses.
+Assistant: Which format would you like?
+
+Final user message:
+Excel
+
+→ EXPENSE
+
+----------------------------
+
+Conversation:
+User: Show my grocery expenses.
+Assistant: Which period?
+
+Final user message:
+Last 3 months
+
+→ EXPENSE
+
+----------------------------
+
+Conversation:
+User: What's the latest AI news?
+
+Final user message:
+Tell me more.
+
+→ OUT_OF_SCOPE
+
+----------------------------
+
+Conversation:
+User: Write Python code.
+
+Final user message:
+Use FastAPI.
+
+→ OUT_OF_SCOPE
+
+----------------------------
+
+Conversation:
+User: Who won the IPL?
+
+Final user message:
+What about last year?
+
+→ OUT_OF_SCOPE
+
+Return ONLY one of:
+
+EXPENSE
+OUT_OF_SCOPE
 """

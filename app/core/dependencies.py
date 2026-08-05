@@ -22,6 +22,15 @@ from fastapi import Request
 from app.services.storage_service import StorageService
 from app.core.config import settings
 from imagekitio import ImageKit
+from functools import lru_cache
+from app.services.budget_service import BudgetService
+from app.ai.classifiers.scope_classifier import ScopeClassifier
+
+
+@lru_cache
+def get_scope_classifier():
+
+    return ScopeClassifier()
 
 
 @lru_cache
@@ -119,18 +128,27 @@ def get_dashboard_service(
 
 
 def get_insight_service(
-    db: Session,
+    db: Session = Depends(get_db),
 ):
     return InsightService(db)
 
 
 def get_chat_service(
-    db: Session, agent=Depends(get_expense_agent), storage=Depends(get_storage_service)
+    db: Session,
+    agent=Depends(get_expense_agent),
+    storage=Depends(get_storage_service),
+    classifier=Depends(get_scope_classifier),
 ):
-    return ChatService(db, agent, storage)
+    return ChatService(db, agent, storage, classifier)
 
 
 def get_thread_service(
     db: Session,
 ):
     return ThreadService(db)
+
+
+def get_budget_service(
+    db: Session = Depends(get_db),
+):
+    return BudgetService(db)

@@ -2,17 +2,14 @@ import json
 import logging
 from typing import Any
 
-from langchain_core.messages import (
-    AIMessageChunk,
-    HumanMessage,
-    ToolMessage,
-)
+from langchain_core.messages import AIMessageChunk, HumanMessage, ToolMessage, AIMessage
 
 from app.ai.agent.context import ExpenseAgentContext
-
+from sqlalchemy import select
 from app.models.message import Message
 from app.models.thread import Thread
 from app.models.user import User
+from app.ai.classifiers.scope_classifier import Scope
 
 logger = logging.getLogger(__name__)
 
@@ -24,10 +21,12 @@ class ChatService:
         db,
         agent,
         storage,
+        classifier,
     ):
         self.db = db
         self.agent = agent
         self.storage = storage
+        self.classifier = classifier
 
     # =========================================================
     # SSE
@@ -89,6 +88,18 @@ class ChatService:
 
         return None
 
+    def _create_message_history(self, messages):
+        history = []
+
+        for message in messages[-8:]:  # Last 8 messages
+
+            if message.role == "user":
+                history.append(HumanMessage(content=message.content))
+
+            else:
+                history.append(AIMessage(content=message.content))
+        return history
+
     # =========================================================
     # Chat stream
     # =========================================================
@@ -102,6 +113,18 @@ class ChatService:
         # -----------------------------------------------------
         # Save user message
         # -----------------------------------------------------
+
+        stmt = (
+            select(Message)
+            .where(Message.thread_id == thread.id)
+            .order_by(Message.created_at.asc())
+        )
+
+        messages = list(self.db.scalars(stmt).all())
+
+        history = self._create_message_history(messages=messages)
+
+        scope = self.classifier.classify(history)
 
         user_message = Message(
             thread_id=thread.id,
@@ -151,6 +174,44 @@ class ChatService:
         artifacts: list[dict[str, Any]] = []
 
         try:
+            if scope == Scope.OUT_OF_SCOPE:
+
+                response = (
+                    "I'm **Expense AI**, so I can only help with your "
+                    "expenses, receipts, spending, reports, budgets, "
+                    "and financial insights.\n\n"
+                    "Try asking something like:\n"
+                    "- What did I spend this month?\n"
+                    "- Show my restaurant expenses.\n"
+                    "- What items did I purchase?\n"
+                    "- Export my July expenses to Excel."
+                )
+
+                assistant_message = Message(
+                    thread_id=thread.id,
+                    role="assistant",
+                    content=response,
+                    artifacts=[],
+                )
+
+                self.db.add(assistant_message)
+
+                self.db.commit()
+
+                yield self._event(
+                    {
+                        "type": "token",
+                        "content": response,
+                    }
+                )
+
+                yield self._event(
+                    {
+                        "type": "done",
+                    }
+                )
+
+                return
             # =================================================
             # Agent stream
             # =================================================

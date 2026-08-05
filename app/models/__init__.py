@@ -4,3 +4,4 @@ from app.models.receipt import Receipt
 from app.models.receipt_item import ReceiptItem
 from app.models.thread import Thread
 from app.models.message import Message
+from app.models.budget import Budget

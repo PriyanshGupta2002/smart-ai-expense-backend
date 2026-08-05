@@ -41,6 +41,16 @@ class DashboardService:
 
         return filters
 
+    def get_me(
+        self,
+        user: User,
+    ):
+        return {
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "email": user.email,
+        }
+
     def get_dashboard_summary(
         self,
         user: User,
