@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     IMAGEKIT_URL_ENDPOINT: str
     IMAGEKIT_PUBLIC_KEY: str
     REDIS_URL: str
+    GOOGLE_REDIRECT_URI: str
+    GOOGLE_CLIENT_ID: str
+    GOOGLE_CLIENT_SECRET: str
+    FRONTEND_URL: str
 
     model_config = SettingsConfigDict(
         env_file=".env",

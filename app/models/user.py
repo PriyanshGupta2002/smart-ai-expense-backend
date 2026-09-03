@@ -71,3 +71,8 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan",
     )
+    profile_image_url = mapped_column(String, nullable=True)
+
+    profile_image_file_id = mapped_column(String, nullable=True)
+
+    profile_image_path = mapped_column(String, nullable=True)

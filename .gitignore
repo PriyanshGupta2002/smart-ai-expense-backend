@@ -14,3 +14,5 @@ venv/
 env/
 # Chroma DB
 **/chroma_db/
+credentials/
+*.json

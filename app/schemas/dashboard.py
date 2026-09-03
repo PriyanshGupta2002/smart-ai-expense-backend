@@ -1,6 +1,6 @@
 from pydantic import BaseModel, ConfigDict
 from decimal import Decimal
-from datetime import date
+from datetime import date, datetime
 from typing import Literal
 
 
@@ -79,4 +79,6 @@ class MeResponse(BaseModel):
     first_name: str
     last_name: str
     email: str
+    created_at: datetime
+    profile_image_url: str | None
     model_config = ConfigDict(from_attributes=True)

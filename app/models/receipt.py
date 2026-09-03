@@ -46,16 +46,17 @@ class Receipt(Base):
 
     imagekit_file_id: Mapped[str] = mapped_column(
         String(255),
-        nullable=False,
+        nullable=True,
     )
 
     image_url: Mapped[str] = mapped_column(
         Text,
-        nullable=False,
+        nullable=True,
     )
 
     image_path: Mapped[str | None] = mapped_column(
         Text,
+        nullable=True,
     )
 
     original_filename: Mapped[str | None] = mapped_column(
@@ -185,6 +186,23 @@ class Receipt(Base):
         server_default=func.now(),
         onupdate=func.now(),
         nullable=False,
+    )
+
+    # =====================================
+    # Source
+    # =====================================
+
+    source: Mapped[str] = mapped_column(
+        String(30),
+        nullable=False,
+        default="upload",
+    )
+
+    gmail_message_id: Mapped[str | None] = mapped_column(
+        String(255),
+        unique=True,
+        nullable=True,
+        index=True,
     )
 
     # =====================================

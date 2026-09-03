@@ -18,10 +18,11 @@ from app.ai.agent.tools import (
     get_sample_data,
     execute_sql,
     export_expenses,
+    send_email,
 )
 
 model = ChatOpenRouter(
-    model="openai/gpt-5-mini",
+    model="google/gemini-3.8-flash",
     temperature=0,
 )
 summary_model = ChatOpenRouter(
@@ -30,6 +31,7 @@ summary_model = ChatOpenRouter(
 
 
 def create_expense_agent(checkpointer):
+
     return create_agent(
         model=model,
         tools=[
@@ -38,6 +40,7 @@ def create_expense_agent(checkpointer):
             get_sample_data,
             execute_sql,
             export_expenses,
+            send_email,
         ],
         context_schema=ExpenseAgentContext,
         system_prompt=EXPENSE_AGENT_PROMPT,

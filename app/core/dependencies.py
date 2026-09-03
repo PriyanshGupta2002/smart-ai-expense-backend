@@ -1,8 +1,12 @@
 from collections.abc import Generator
 
 from fastapi import Depends, HTTPException, Request
+from langchain_openrouter import ChatOpenRouter
 from sqlalchemy.orm import Session
 
+from app.services.gmail_sync_service import GmailSyncService
+from app.services.gmail_transaction_processor import GmailTransactionProcessor
+from app.ai.gmail.transaction_classifier import GmailTransactionClassifier
 from app.db.session import SessionLocal
 from app.models.user import User
 from app.core.security import decode_token
@@ -11,13 +15,15 @@ import jwt
 from fastapi import Depends
 from sqlalchemy.orm import Session
 from functools import lru_cache
-
+import redis
 from app.services.auth_service import AuthService
+from app.services.gmail_parser import GmailParser
 from app.services.receipt_service import ReceiptService
 from app.services.dashboard_service import DashboardService
 from app.services.insights_service import InsightService
 from app.services.chat_service import ChatService
 from app.services.thread_service import ThreadService
+from app.services.user_service import UserService
 from fastapi import Request
 from app.services.storage_service import StorageService
 from app.core.config import settings
@@ -25,6 +31,13 @@ from imagekitio import ImageKit
 from functools import lru_cache
 from app.services.budget_service import BudgetService
 from app.ai.classifiers.scope_classifier import ScopeClassifier
+from app.services.gmail_service import GmailService
+from app.services.gmail_ingestion_service import GmailIngestionService
+
+redis_client = redis.Redis.from_url(
+    settings.REDIS_URL,
+    decode_responses=True,
+)
 
 
 @lru_cache
@@ -38,6 +51,10 @@ def _get_imagekit_client() -> ImageKit:
     return ImageKit(
         private_key=settings.IMAGEKIT_PRIVATE_KEY,
     )
+
+
+def get_redis():
+    return redis_client
 
 
 def get_expense_agent(request: Request):
@@ -152,3 +169,61 @@ def get_budget_service(
     db: Session = Depends(get_db),
 ):
     return BudgetService(db)
+
+
+def get_user_service(
+    db: Session = Depends(get_db),
+):
+    return UserService(db)
+
+
+def get_gmail_service(
+    db: Session = Depends(get_db),
+) -> GmailService:
+
+    return GmailService(db)
+
+
+def get_gmail_parser() -> GmailParser:
+    return GmailParser()
+
+
+def get_gmail_ingestion_service(
+    gmail_service: GmailService = Depends(get_gmail_service),
+    gmail_parser: GmailParser = Depends(get_gmail_parser),
+):
+    return GmailIngestionService(email_service=gmail_service, gmail_parser=gmail_parser)
+
+
+def get_gmail_transaction_classifier() -> GmailTransactionClassifier:
+    model = ChatOpenRouter(
+        model="google/gemini-2.5-flash",
+        temperature=0,
+    )
+
+    return GmailTransactionClassifier(
+        model=model,
+    )
+
+
+def get_gmail_transaction_processor(
+    db=Depends(get_db),
+    classifier=Depends(get_gmail_transaction_classifier),
+) -> GmailTransactionProcessor:
+
+    return GmailTransactionProcessor(
+        db=db,
+        classifier=classifier,
+    )
+
+
+def get_gmail_sync_service(
+    db=Depends(get_db),
+    ingestion_service=Depends(get_gmail_ingestion_service),
+    transaction_processor=Depends(get_gmail_transaction_processor),
+):
+    return GmailSyncService(
+        db=db,
+        ingestion_service=ingestion_service,
+        transaction_processor=transaction_processor,
+    )

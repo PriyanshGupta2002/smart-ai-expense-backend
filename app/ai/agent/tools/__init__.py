@@ -3,6 +3,7 @@ from app.ai.agent.tools.get_table_schema import get_table_schema
 from app.ai.agent.tools.list_tables import list_tables
 from app.ai.agent.tools.sql import execute_sql
 from app.ai.agent.tools.export_tool import export_expenses
+from app.ai.agent.tools.gmail_tools import send_email
 
 __all__ = [
     "list_tables",
@@ -10,4 +11,5 @@ __all__ = [
     "get_sample_data",
     "execute_sql",
     "export_expenses",
+    "send_email",
 ]

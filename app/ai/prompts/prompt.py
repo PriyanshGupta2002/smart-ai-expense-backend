@@ -306,7 +306,6 @@ Treat the receipt as the complete source of truth.
 Extracted receipt:
 {receipt}
 """
-
 SCOPE_CLASSIFIER_SYSTEM_PROMPT = """
 You are an intent classifier for Expense AI.
 
@@ -316,7 +315,7 @@ Your task is to classify ONLY the FINAL user message while considering the previ
 
 A message that appears unrelated on its own may actually be answering a previous question from the assistant.
 
-Expense AI helps users understand and manage their personal finances based on their receipts, expenses, budgets, and spending history.
+Expense AI helps users understand and manage their personal finances based on their receipts, expenses, budgets, spending history, and connected productivity services.
 
 Return EXPENSE if the final user message is related to:
 
@@ -340,7 +339,41 @@ Return EXPENSE if the final user message is related to:
 - spending trends
 - monthly or yearly comparisons
 - financial planning
-- follow-up answers to expense-related conversations
+- expense reports
+- expense summaries
+- creating or sending expense reports
+- emailing expenses
+- sending expenses by email
+- emailing expense summaries
+- sending financial reports
+- sending exported expense files
+- asking the agent to email, send, or share expense-related information
+
+IMPORTANT:
+
+An action involving another service such as Gmail should still be classified as EXPENSE when the CONTENT or PURPOSE of the action is related to the user's expenses or finances.
+
+For example:
+
+"Send me my expenses by email"
+→ EXPENSE
+
+"Email my expenses from last month"
+→ EXPENSE
+
+"Send my expense report to me"
+→ EXPENSE
+
+"Mail me my grocery expenses"
+→ EXPENSE
+
+"Send my July expense Excel file to my email"
+→ EXPENSE
+
+"Email me a summary of my spending"
+→ EXPENSE
+
+The fact that the user wants to use email does NOT make the request OUT_OF_SCOPE if the underlying information or action concerns expenses or personal finance.
 
 If the message can reasonably be answered by analyzing the user's expense data or helping them manage their finances, return EXPENSE.
 
@@ -403,6 +436,36 @@ Last 3 months
 ----------------------------
 
 Conversation:
+User: What did I spend last month?
+
+Final user message:
+Send me those expenses by email.
+
+→ EXPENSE
+
+----------------------------
+
+Conversation:
+User: Show my expenses from July.
+
+Final user message:
+Email them to me.
+
+→ EXPENSE
+
+----------------------------
+
+Conversation:
+User: Give me my restaurant expenses.
+
+Final user message:
+Send the report to my Gmail.
+
+→ EXPENSE
+
+----------------------------
+
+Conversation:
 User: What's the latest AI news?
 
 Final user message:
@@ -429,6 +492,18 @@ Final user message:
 What about last year?
 
 → OUT_OF_SCOPE
+
+----------------------------
+
+Conversation:
+User: Send an email to my friend saying hello.
+
+Final user message:
+Send it now.
+
+→ OUT_OF_SCOPE
+
+----------------------------
 
 Return ONLY one of:
 

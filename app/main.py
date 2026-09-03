@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.router.auth_router import router as AuthRouter
 from app.router.receipt_router import router as ReceiptRouter
 from app.router.dashboard_router import router as DashboardRouter
+from app.router.user_router import router as UserRouter
 from app.router.chat_router import router as ChatRouter
 from pathlib import Path
 from app.core.checkpointer import get_checkpointer
@@ -10,6 +11,7 @@ from app.ai.agent.agent import create_expense_agent
 from contextlib import asynccontextmanager
 from app.router.thread_router import router as ThreadRouter
 from app.router.budget_router import router as BudgetRouter
+from app.router.google_router import router as GoogleRouter
 
 APP_DIR = Path(__file__).resolve().parent
 
@@ -61,6 +63,8 @@ app.include_router(ReceiptRouter)
 app.include_router(DashboardRouter)
 app.include_router(ChatRouter)
 app.include_router(ThreadRouter)
+app.include_router(UserRouter)
+app.include_router(GoogleRouter)
 
 
 # Example GET route for app
