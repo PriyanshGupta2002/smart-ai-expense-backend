@@ -19,6 +19,7 @@ from app.ai.agent.tools import (
     execute_sql,
     export_expenses,
     send_email,
+    send_whatsapp_message,
 )
 
 model = ChatOpenRouter(
@@ -41,6 +42,7 @@ def create_expense_agent(checkpointer):
             execute_sql,
             export_expenses,
             send_email,
+            send_whatsapp_message,
         ],
         context_schema=ExpenseAgentContext,
         system_prompt=EXPENSE_AGENT_PROMPT,

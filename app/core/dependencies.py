@@ -33,6 +33,8 @@ from app.services.budget_service import BudgetService
 from app.ai.classifiers.scope_classifier import ScopeClassifier
 from app.services.gmail_service import GmailService
 from app.services.gmail_ingestion_service import GmailIngestionService
+from app.services.whatsapp_connection_service import WhatsAppConnectionService
+from app.services.whatsapp_service import WhatsAppService
 
 redis_client = redis.Redis.from_url(
     settings.REDIS_URL,
@@ -227,3 +229,17 @@ def get_gmail_sync_service(
         ingestion_service=ingestion_service,
         transaction_processor=transaction_processor,
     )
+
+
+def get_whatsapp_service() -> WhatsAppService:
+    return WhatsAppService(
+        base_url=settings.OPENWA_URL,
+        api_key=settings.OPENWA_API_KEY,
+    )
+
+
+def get_whatsapp_connection_service(
+    db: Session = Depends(get_db),
+    whatsapp_service: WhatsAppService = Depends(get_whatsapp_service),
+) -> WhatsAppConnectionService:
+    return WhatsAppConnectionService(db=db, whatsapp_service=whatsapp_service)

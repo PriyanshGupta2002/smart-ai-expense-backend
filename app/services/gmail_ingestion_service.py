@@ -1,11 +1,17 @@
-from app.services.gmail_service import GmailService
-from uuid import UUID
-from app.services.gmail_parser import GmailParser
 from datetime import datetime
+from uuid import UUID
+
+from app.services.gmail_service import GmailService
+from app.services.gmail_parser import GmailParser
 
 
 class GmailIngestionService:
-    def __init__(self, email_service: GmailService, gmail_parser: GmailParser):
+
+    def __init__(
+        self,
+        email_service: GmailService,
+        gmail_parser: GmailParser,
+    ):
         self.email_service = email_service
         self.gmail_parser = gmail_parser
 
@@ -30,25 +36,37 @@ class GmailIngestionService:
         if after:
             query += f" after:{int(after.timestamp())}"
 
-        messages = self.email_service.search_messages(
-            user_id,
-            query=query,
-            max_results=max_results,
-        )
-
         results = []
 
-        for message in messages:
-            message_id = message["id"]
+        page_token = None
 
-            full_message = self.email_service.get_message(
+        while True:
+
+            page = self.email_service.search_messages(
                 user_id,
-                message_id,
+                query=query,
+                max_results=max_results,
+                page_token=page_token,
             )
 
-            parsed_message = self.gmail_parser.parse_message(full_message)
+            messages = page["messages"]
 
-            if parsed_message:
-                results.append(parsed_message)
+            for message in messages:
+                message_id = message["id"]
+
+                full_message = self.email_service.get_message(
+                    user_id,
+                    message_id,
+                )
+
+                parsed_message = self.gmail_parser.parse_message(full_message)
+
+                if parsed_message:
+                    results.append(parsed_message)
+
+            page_token = page.get("next_page_token")
+
+            if not page_token:
+                break
 
         return results

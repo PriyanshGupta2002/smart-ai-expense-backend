@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_ID: str
     GOOGLE_CLIENT_SECRET: str
     FRONTEND_URL: str
+    OPENWA_URL: str
+    OPENWA_API_KEY: str
+    OPENWA_SESSION_ID: str
+    WHATSAPP_WEBHOOK_URL: str
 
     model_config = SettingsConfigDict(
         env_file=".env",

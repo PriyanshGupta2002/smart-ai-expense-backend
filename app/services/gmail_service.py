@@ -302,16 +302,27 @@ class GmailService:
         user_id: UUID,
         query: str,
         max_results: int = 50,
+        page_token: str | None = None,
     ):
-        """ "Search for messages in the user's Gmail account using a query string."""
+        """Search for messages in the user's Gmail account using a query string."""
+
         gmail = self.get_resource(user_id)
-        response = (
-            gmail.users()
-            .messages()
-            .list(userId="me", q=query, maxResults=max_results)
-            .execute()
-        )
-        return response.get("messages", [])
+
+        params = {
+            "userId": "me",
+            "q": query,
+            "maxResults": max_results,
+        }
+
+        if page_token:
+            params["pageToken"] = page_token
+
+        response = gmail.users().messages().list(**params).execute()
+
+        return {
+            "messages": response.get("messages", []),
+            "next_page_token": response.get("nextPageToken"),
+        }
 
     def get_message(
         self,

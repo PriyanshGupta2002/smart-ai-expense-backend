@@ -306,6 +306,8 @@ Treat the receipt as the complete source of truth.
 Extracted receipt:
 {receipt}
 """
+
+
 SCOPE_CLASSIFIER_SYSTEM_PROMPT = """
 You are an intent classifier for Expense AI.
 
@@ -347,11 +349,17 @@ Return EXPENSE if the final user message is related to:
 - emailing expense summaries
 - sending financial reports
 - sending exported expense files
-- asking the agent to email, send, or share expense-related information
+- sending expenses through WhatsApp
+- sending expense summaries through WhatsApp
+- sending expense reports through WhatsApp
+- sending exported expense files through WhatsApp
+- asking the agent to email, send, share, or deliver expense-related information through another connected service
 
 IMPORTANT:
 
-An action involving another service such as Gmail should still be classified as EXPENSE when the CONTENT or PURPOSE of the action is related to the user's expenses or finances.
+An action involving another service such as Gmail or WhatsApp should still be classified as EXPENSE when the CONTENT or PURPOSE of the action is related to the user's expenses or finances.
+
+The delivery channel does NOT determine the scope.
 
 For example:
 
@@ -373,11 +381,42 @@ For example:
 "Email me a summary of my spending"
 → EXPENSE
 
-The fact that the user wants to use email does NOT make the request OUT_OF_SCOPE if the underlying information or action concerns expenses or personal finance.
+"Send my expenses on WhatsApp"
+→ EXPENSE
 
-If the message can reasonably be answered by analyzing the user's expense data or helping them manage their finances, return EXPENSE.
+"WhatsApp me my expenses"
+→ EXPENSE
 
-Return OUT_OF_SCOPE only if the conversation is clearly unrelated to expense management or personal finance.
+"Send this month's expense summary to my WhatsApp"
+→ EXPENSE
+
+"Send my July expense report on WhatsApp"
+→ EXPENSE
+
+"Send the Excel report to me on WhatsApp"
+→ EXPENSE
+
+"WhatsApp me the restaurant expenses"
+→ EXPENSE
+
+"Send it there"
+→ EXPENSE
+(when the previous conversation establishes that "there" means WhatsApp
+and the content being sent is expense-related)
+
+"Send those expenses there"
+→ EXPENSE
+(when the previous conversation establishes the destination)
+
+The fact that the user wants to use email or WhatsApp does NOT make
+the request OUT_OF_SCOPE if the underlying information or action
+concerns expenses or personal finance.
+
+If the message can reasonably be answered by analyzing the user's
+expense data or helping them manage their finances, return EXPENSE.
+
+Return OUT_OF_SCOPE only if the conversation is clearly unrelated
+to expense management or personal finance.
 
 Examples
 
@@ -466,6 +505,36 @@ Send the report to my Gmail.
 ----------------------------
 
 Conversation:
+User: What did I spend this month?
+
+Final user message:
+Send it to me on WhatsApp.
+
+→ EXPENSE
+
+----------------------------
+
+Conversation:
+User: Show me my grocery expenses.
+
+Final user message:
+WhatsApp them to me.
+
+→ EXPENSE
+
+----------------------------
+
+Conversation:
+User: Create an expense report for August.
+
+Final user message:
+Send it on WhatsApp.
+
+→ EXPENSE
+
+----------------------------
+
+Conversation:
 User: What's the latest AI news?
 
 Final user message:
@@ -497,6 +566,16 @@ What about last year?
 
 Conversation:
 User: Send an email to my friend saying hello.
+
+Final user message:
+Send it now.
+
+→ OUT_OF_SCOPE
+
+----------------------------
+
+Conversation:
+User: Send a WhatsApp message to my friend saying hello.
 
 Final user message:
 Send it now.
