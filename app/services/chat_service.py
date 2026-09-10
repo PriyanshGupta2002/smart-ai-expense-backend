@@ -8,6 +8,7 @@ from app.ai.agent.context import ExpenseAgentContext
 from sqlalchemy import select
 from app.models.message import Message
 from app.models.thread import Thread
+from app.models.user_preferences import UserPreferences
 from app.models.user import User
 from app.ai.classifiers.scope_classifier import Scope
 
@@ -16,13 +17,7 @@ logger = logging.getLogger(__name__)
 
 class ChatService:
 
-    def __init__(
-        self,
-        db,
-        agent,
-        storage,
-        classifier,
-    ):
+    def __init__(self, db, agent, storage, classifier):
         self.db = db
         self.agent = agent
         self.storage = storage
@@ -105,10 +100,7 @@ class ChatService:
     # =========================================================
 
     def stream_chat(
-        self,
-        user: User,
-        thread: Thread,
-        message: str,
+        self, user: User, thread: Thread, message: str, preferences: UserPreferences
     ):
         # -----------------------------------------------------
         # Save user message
@@ -148,12 +140,12 @@ class ChatService:
         # Agent context
         # -----------------------------------------------------
 
-        context: ExpenseAgentContext = {
-            "db": self.db,
-            "user_id": user.id,
-            "storage": self.storage,
-        }
-
+        context = ExpenseAgentContext(
+            user_id=user.id,
+            db=self.db,
+            storage=self.storage,
+            preferences=preferences,
+        )
         # -----------------------------------------------------
         # LangGraph thread
         # -----------------------------------------------------

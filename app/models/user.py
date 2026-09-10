@@ -61,6 +61,11 @@ class User(Base):
         cascade="all, delete-orphan",
     )
 
+    notifications: Mapped[list["Notification"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+
     threads = relationship(
         "Thread",
         back_populates="user",

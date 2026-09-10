@@ -13,6 +13,8 @@ from app.router.thread_router import router as ThreadRouter
 from app.router.budget_router import router as BudgetRouter
 from app.router.google_router import router as GoogleRouter
 from app.router.whatsapp_router import router as WhatsAppRouter
+from app.router.preferences_router import router as PreferencesRouter
+from app.router.notification_router import router as NotificationRouter
 
 APP_DIR = Path(__file__).resolve().parent
 
@@ -67,6 +69,8 @@ app.include_router(ThreadRouter)
 app.include_router(UserRouter)
 app.include_router(GoogleRouter)
 app.include_router(WhatsAppRouter)
+app.include_router(PreferencesRouter)
+app.include_router(NotificationRouter)
 
 
 # Example GET route for app

@@ -11,6 +11,7 @@ from langchain.agents.middleware import (
 
 from app.ai.agent.context import ExpenseAgentContext
 from app.ai.agent.prompt import EXPENSE_AGENT_PROMPT
+from app.ai.agent.middleware import user_preferences_prompt
 
 from app.ai.agent.tools import (
     list_tables,
@@ -48,6 +49,7 @@ def create_expense_agent(checkpointer):
         system_prompt=EXPENSE_AGENT_PROMPT,
         checkpointer=checkpointer,
         middleware=[
+            user_preferences_prompt,
             ToolRetryMiddleware(
                 max_retries=2,
                 backoff_factor=2.0,

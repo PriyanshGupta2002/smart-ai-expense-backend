@@ -77,6 +77,19 @@ class WhatsAppConnectionService:
 
         return connection
 
+    def mark_disconnected(
+        self,
+        connection: WhatsAppConnection,
+    ) -> WhatsAppConnection:
+
+        connection.connected = False
+        connection.connected_at = None
+
+        self.db.commit()
+        self.db.refresh(connection)
+
+        return connection
+
     async def disconnect(
         self,
         user_id: uuid.UUID,
@@ -91,7 +104,7 @@ class WhatsAppConnectionService:
         if connection.session_id:
             await self.whatsapp_service.delete_session(connection.session_id)
 
-        # Delete local DB connection
+        # Delete local connection
         self.db.delete(connection)
         self.db.commit()
 

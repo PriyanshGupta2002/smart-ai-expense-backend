@@ -5,3 +5,7 @@ from app.models.receipt_item import ReceiptItem
 from app.models.thread import Thread
 from app.models.message import Message
 from app.models.budget import Budget
+from app.models.user_preferences import UserPreferences
+from app.models.google_connections import GoogleConnection
+from app.models.whatsapp_connections import WhatsAppConnection
+from app.models.notification import Notification

@@ -35,6 +35,7 @@ from app.services.gmail_service import GmailService
 from app.services.gmail_ingestion_service import GmailIngestionService
 from app.services.whatsapp_connection_service import WhatsAppConnectionService
 from app.services.whatsapp_service import WhatsAppService
+from app.services.user_preferences_service import UserPreferencesService
 
 redis_client = redis.Redis.from_url(
     settings.REDIS_URL,
@@ -150,6 +151,10 @@ def get_insight_service(
     db: Session = Depends(get_db),
 ):
     return InsightService(db)
+
+
+def get_user_preferences_service(db: Session = Depends(get_db)):
+    return UserPreferencesService(db=db)
 
 
 def get_chat_service(

@@ -26,45 +26,89 @@ async def connect_whatsapp(
 ):
     connection = connection_service.create_connection(user.id)
 
-    # If we already have a session, don't create another one.
+    # --------------------------------------------------
+    # Existing session
+    # --------------------------------------------------
+
     if connection.session_id:
+
         session = await whatsapp_service.get_session(connection.session_id)
 
-        return {
-            "success": True,
-            "session_id": connection.session_id,
-            "status": session.get("status"),
-            "connected": connection.connected,
-        }
+        status = session.get("status")
 
-    # Create a unique OpenWA session name.
+        # Already connected
+        if status == "ready":
+
+            connection_service.mark_connected(
+                connection,
+                phone_number=session.get("phone"),
+            )
+
+            return {
+                "success": True,
+                "session_id": connection.session_id,
+                "status": "ready",
+                "connected": True,
+                "phone_number": connection.phone_number,
+            }
+
+        # --------------------------------------------------
+        # Existing session is not ready.
+        # Delete it and start fresh.
+        # --------------------------------------------------
+
+        await connection_service.disconnect(user_id=user.id)
+
+        # IMPORTANT:
+        # The old SQLAlchemy object is gone.
+        # Create a new DB connection.
+        connection = connection_service.create_connection(user.id)
+
+    # --------------------------------------------------
+    # Create new OpenWA session
+    # --------------------------------------------------
+
     session_name = f"expense-ai-{user.id}"
 
     session = await whatsapp_service.create_session(name=session_name)
 
     session_id = session["id"]
 
-    # Save OpenWA session ID in our DB.
+    # --------------------------------------------------
+    # Save session ID
+    # --------------------------------------------------
+
     connection_service.set_session_id(
         connection,
         session_id,
     )
 
-    # Register webhook for this session.
+    # --------------------------------------------------
+    # Register webhook
+    # --------------------------------------------------
+
     await whatsapp_service.create_webhook(
-        session_id=session_id, webhook_url=settings.WHATSAPP_WEBHOOK_URL
+        session_id=session_id,
+        webhook_url=settings.WHATSAPP_WEBHOOK_URL,
     )
 
-    # Start the WhatsApp session.
+    # --------------------------------------------------
+    # Start session
+    # --------------------------------------------------
+
     await whatsapp_service.start_session(session_id)
 
-    # Get QR.
+    # --------------------------------------------------
+    # Get QR
+    # --------------------------------------------------
+
     qr = await whatsapp_service.get_qr(session_id)
 
     return {
         "success": True,
         "session_id": session_id,
         "status": "qr_ready",
+        "connected": False,
         "qr": qr,
     }
 

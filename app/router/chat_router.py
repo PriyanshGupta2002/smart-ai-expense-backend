@@ -18,9 +18,11 @@ from app.core.dependencies import (
     get_db,
     get_expense_agent,
     get_storage_service,
+    get_user_preferences_service,
 )
 
 from app.services.storage_service import StorageService
+from app.services.user_preferences_service import UserPreferencesService
 
 router = APIRouter(
     prefix="/chat",
@@ -37,8 +39,10 @@ def chat(
     agent=Depends(get_expense_agent),
     storage: StorageService = Depends(get_storage_service),
     classifier=Depends(get_scope_classifier),
+    preferences_service: UserPreferencesService = Depends(get_user_preferences_service),
 ):
     thread_service = get_thread_service(db=db)
+    preferences = preferences_service.get_by_user_id(user_id=user.id)
 
     thread = thread_service.get_thread(
         user=user,
@@ -52,14 +56,15 @@ def chat(
         )
 
     service = get_chat_service(
-        db=db, agent=agent, storage=storage, classifier=classifier
+        db=db,
+        agent=agent,
+        storage=storage,
+        classifier=classifier,
     )
 
     return StreamingResponse(
         service.stream_chat(
-            user=user,
-            thread=thread,
-            message=payload.message,
+            user=user, thread=thread, message=payload.message, preferences=preferences
         ),
         media_type="text/event-stream",
         headers={
