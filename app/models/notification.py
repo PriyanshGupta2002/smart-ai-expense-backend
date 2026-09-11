@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, func
+from sqlalchemy import DateTime, ForeignKey, String, Text, func, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -10,6 +10,15 @@ from app.db.base import Base
 
 class Notification(Base):
     __tablename__ = "notifications"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "type",
+            "week_key",
+            name="uq_user_notification_week",
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -68,6 +77,12 @@ class Notification(Base):
     sent_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
+    )
+
+    week_key: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True,
+        index=True,
     )
 
     created_at: Mapped[datetime] = mapped_column(

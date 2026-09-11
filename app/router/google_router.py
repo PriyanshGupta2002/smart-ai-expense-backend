@@ -142,17 +142,18 @@ def google_status(
     db: Session = Depends(get_db),
 ):
     """
-    Return whether the authenticated user has connected Google.
+    Return the Google connection status for the authenticated user.
     """
 
     service = GoogleConnectionService(db)
 
-    connection = service.get_by_user_id(
-        user.id,
-    )
+    connection = service.get_by_user_id(user.id)
 
     return {
         "connected": connection is not None,
+        "authorization_status": (
+            connection.authorization_status if connection else None
+        ),
     }
 
 
@@ -195,6 +196,44 @@ def gmail_tools(
         "connected": bool(tools),
         "tools": [tool.name for tool in tools],
     }
+
+
+@router.get("/reconnect")
+def reconnect_google(
+    user: User = Depends(get_current_user),
+    redis=Depends(get_redis),
+):
+    """
+    Start Google OAuth again for a user whose authorization
+    has expired or been revoked.
+    """
+
+    oauth_service = GoogleOAuthService()
+
+    state = oauth_service.generate_state()
+
+    authorization_url, code_verifier = oauth_service.get_authorization_url(
+        state=state,
+    )
+
+    # state -> user
+    redis.setex(
+        f"google_oauth_state:{state}",
+        600,
+        str(user.id),
+    )
+
+    # state -> code verifier
+    redis.setex(
+        f"google_oauth_verifier:{state}",
+        600,
+        code_verifier,
+    )
+
+    return RedirectResponse(
+        url=authorization_url,
+        status_code=307,
+    )
 
 
 @router.post("/gmail/sync")

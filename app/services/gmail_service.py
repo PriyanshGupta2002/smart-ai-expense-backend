@@ -1,95 +1,3 @@
-# # app/services/gmail_service.py
-
-# from uuid import UUID
-# import base64
-# from email.mime.text import MIMEText
-
-# from google.oauth2.credentials import Credentials
-# from googleapiclient.discovery import build
-# from sqlalchemy.orm import Session
-
-# from app.models.google_connections import GoogleConnection
-# from app.core.config import settings
-
-
-# class GmailService:
-
-#     def __init__(self, db: Session):
-#         self.db = db
-
-#     def get_connection(
-#         self,
-#         user_id: UUID,
-#     ) -> GoogleConnection | None:
-#         return (
-#             self.db.query(GoogleConnection)
-#             .filter(GoogleConnection.user_id == user_id)
-#             .first()
-#         )
-
-#     def get_resource(
-#         self,
-#         user_id: UUID,
-#     ):
-#         connection = self.get_connection(user_id)
-
-#         if not connection:
-#             raise ValueError("Google account is not connected")
-
-#         credentials = Credentials(
-#             token=connection.access_token,
-#             refresh_token=connection.refresh_token,
-#             token_uri="https://oauth2.googleapis.com/token",
-#             client_id=settings.GOOGLE_CLIENT_ID,
-#             client_secret=settings.GOOGLE_CLIENT_SECRET,
-#             scopes=connection.scopes,
-#         )
-
-#         service = build(
-#             "gmail",
-#             "v1",
-#             credentials=credentials,
-#         )
-
-#         return service
-
-#     def send_email(
-#         self,
-#         user_id: UUID,
-#         subject: str,
-#         body: str,
-#     ):
-#         """
-#         Send an email using the user's connected Gmail account.
-#         """
-
-#         gmail = self.get_resource(user_id)
-#         profile = gmail.users().getProfile(userId="me").execute()
-
-#         message = MIMEText(body)
-
-#         message["To"] = profile["emailAddress"]
-#         message["Subject"] = subject
-
-#         encoded_message = base64.urlsafe_b64encode(message.as_bytes()).decode()
-
-#         response = (
-#             gmail.users()
-#             .messages()
-#             .send(
-#                 userId="me",
-#                 body={
-#                     "raw": encoded_message,
-#                 },
-#             )
-#             .execute()
-#         )
-
-#         return response
-
-# app/services/gmail_service.py
-# app/services/gmail_service.py
-
 from uuid import UUID
 import base64
 
@@ -104,6 +12,8 @@ from sqlalchemy.orm import Session
 
 from app.models.google_connections import GoogleConnection
 from app.core.config import settings
+from google.auth.exceptions import RefreshError
+from email.mime.multipart import MIMEMultipart
 
 
 class GmailService:
@@ -135,9 +45,13 @@ class GmailService:
         connection: GoogleConnection,
     ) -> None:
 
+        # No refresh token at all
         if not connection.refresh_token:
+            connection.authorization_status = "reauthorization_required"
+            self.db.commit()
+
             raise ValueError(
-                "Google access token has expired and no refresh token is available. "
+                "Google authorization has expired or been revoked. "
                 "Please reconnect your Google account."
             )
 
@@ -150,19 +64,39 @@ class GmailService:
             scopes=connection.scopes,
         )
 
-        # Ask Google for a new access token
-        credentials.refresh(Request())
+        try:
+            # Ask Google for a new access token
+            credentials.refresh(Request())
+
+        except RefreshError as exc:
+            # Refresh token itself is invalid / revoked / expired.
+            # The user must authorize Google again.
+
+            connection.authorization_status = "reauthorization_required"
+
+            self.db.commit()
+
+            raise ValueError(
+                "Google authorization has expired or been revoked. "
+                "Please reconnect your Google account."
+            ) from exc
 
         # -----------------------------------------
-        # Save new access token
+        # Refresh succeeded
         # -----------------------------------------
 
         connection.access_token = credentials.token
 
-        # Google credentials.expiry is normally timezone-aware,
-        # but normalize it before storing.
-        if credentials.expiry:
+        # Google may return a new refresh token.
+        # If it does, save it.
+        if credentials.refresh_token:
+            connection.refresh_token = credentials.refresh_token
 
+        # -----------------------------------------
+        # Save token expiry
+        # -----------------------------------------
+
+        if credentials.expiry:
             expiry = credentials.expiry
 
             if expiry.tzinfo is None:
@@ -171,6 +105,9 @@ class GmailService:
                 expiry = expiry.astimezone(timezone.utc)
 
             connection.token_expires_at = expiry
+
+        # Authorization is working again
+        connection.authorization_status = "authorized"
 
         self.db.add(connection)
         self.db.commit()
@@ -254,35 +191,45 @@ class GmailService:
         user_id: UUID,
         subject: str,
         body: str,
+        html_body: str | None = None,
     ):
         """
         Send an email using the user's connected Gmail account.
 
-        The email is sent FROM the user's connected Gmail account
-        TO that same Gmail account.
+        `body` is the plain-text fallback.
+        `html_body` is optional and can be used for rich emails.
         """
 
         gmail = self.get_resource(user_id)
 
-        # Get the connected Gmail address
         profile = gmail.users().getProfile(userId="me").execute()
-
         email_address = profile["emailAddress"]
 
-        # Create email
-        message = MIMEText(
-            body,
-            "plain",
-            "utf-8",
-        )
+        if html_body:
 
-        message["To"] = email_address
-        message["Subject"] = subject
+            message = MIMEMultipart("alternative")
 
-        # Encode for Gmail API
+            message["To"] = email_address
+            message["Subject"] = subject
+
+            # Plain-text fallback
+            # message.attach(MIMEText(body, "plain", "utf-8"))
+
+            # Rich HTML version
+            message.attach(MIMEText(html_body, "html", "utf-8"))
+
+        else:
+            message = MIMEText(
+                body,
+                "plain",
+                "utf-8",
+            )
+
+            message["To"] = email_address
+            message["Subject"] = subject
+
         encoded_message = base64.urlsafe_b64encode(message.as_bytes()).decode("utf-8")
 
-        # Send
         response = (
             gmail.users()
             .messages()
@@ -293,6 +240,13 @@ class GmailService:
                 },
             )
             .execute()
+        )
+        print(
+            "SENDING GMAIL",
+            "user_id=",
+            user_id,
+            "gmail_account=",
+            email_address,
         )
 
         return response

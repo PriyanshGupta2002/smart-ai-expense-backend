@@ -1,16 +1,17 @@
+from datetime import datetime, timedelta, timezone
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.models.notification import Notification
 from app.models.user import User
 from app.models.user_preferences import UserPreferences
 from app.notifications.generator import NotificationGenerator
 from app.notifications.types import NotificationType
-from datetime import datetime, timedelta, timezone
-
-from app.models.notification import Notification
 
 
 class NotificationService:
+
     def __init__(self, db: Session):
         self.db = db
         self.generator = NotificationGenerator(db)
@@ -51,11 +52,48 @@ class NotificationService:
         user: User,
     ) -> Notification | None:
 
+        # --------------------------------------------------
+        # Check whether weekly summaries are enabled
+        # --------------------------------------------------
+
         if not self.should_send(
             user=user,
             notification_type=NotificationType.WEEKLY_SUMMARY,
         ):
             return None
+
+        # --------------------------------------------------
+        # Calculate week key
+        #
+        # Monday is the beginning of the week.
+        # Example:
+        # Monday, Sep 7, 2026 -> "2026-09-07"
+        # --------------------------------------------------
+
+        now = datetime.now(timezone.utc)
+
+        monday = (now - timedelta(days=now.weekday())).date()
+
+        week_key = monday.isoformat()
+
+        # --------------------------------------------------
+        # IDEMPOTENCY CHECK
+        # --------------------------------------------------
+
+        existing_notification = self.db.scalar(
+            select(Notification).where(
+                Notification.user_id == user.id,
+                Notification.type == NotificationType.WEEKLY_SUMMARY,
+                Notification.week_key == week_key,
+            )
+        )
+
+        if existing_notification:
+            return None
+
+        # --------------------------------------------------
+        # Generate summary
+        # --------------------------------------------------
 
         preferences = self.get_preferences(user)
 
@@ -67,7 +105,9 @@ class NotificationService:
         if not content:
             return None
 
-        now = datetime.now(timezone.utc)
+        # --------------------------------------------------
+        # Create notification
+        # --------------------------------------------------
 
         period_end = now
         period_start = now - timedelta(days=7)
@@ -80,10 +120,14 @@ class NotificationService:
             period_start=period_start,
             period_end=period_end,
             generated_at=now,
+            week_key=week_key,
         )
 
         self.db.add(notification)
         self.db.commit()
         self.db.refresh(notification)
+
+        # IMPORTANT:
+        # No deliver_notification.delay() here.
 
         return notification

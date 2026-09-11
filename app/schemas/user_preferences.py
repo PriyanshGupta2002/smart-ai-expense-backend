@@ -14,6 +14,7 @@ class ExpensePeriod(str, Enum):
     THIS_MONTH = "this_month"
     LAST_MONTH = "last_month"
     THIS_YEAR = "this_year"
+    LAST_30_DAYS = "last_30_days"
 
 
 class ReportFormat(str, Enum):

@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -34,6 +34,10 @@ class GoogleConnectionService:
         connection = self.get_by_user_id(user_id)
 
         if connection:
+            # -----------------------------------------
+            # Existing connection = user is reconnecting
+            # -----------------------------------------
+
             connection.access_token = access_token
 
             # Google may not return a refresh token
@@ -44,19 +48,29 @@ class GoogleConnectionService:
             connection.token_expires_at = token_expires_at
             connection.scopes = scopes
 
+            # OAuth succeeded, so authorization is active again.
+            connection.authorization_status = "active"
+
         else:
+            # -----------------------------------------
+            # First-time Google connection
+            # -----------------------------------------
+
             connection = GoogleConnection(
                 user_id=user_id,
                 access_token=access_token,
                 refresh_token=refresh_token,
                 token_expires_at=token_expires_at,
                 scopes=scopes,
+                authorization_status="active",
             )
 
             self.db.add(connection)
 
         self.db.commit()
         self.db.refresh(connection)
+
+        # Start Gmail sync after successful connection/reconnection.
         sync_user_gmail.delay(str(user_id))
 
         return connection

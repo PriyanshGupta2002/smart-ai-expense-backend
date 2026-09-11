@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, ForeignKey, JSON, Text
+from sqlalchemy import DateTime, ForeignKey, JSON, Text, String
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -44,6 +44,11 @@ class GoogleConnection(Base):
         nullable=True,
     )
 
+    authorization_status: Mapped[str] = mapped_column(
+        String(30),
+        nullable=False,
+        default="active",
+    )
     last_gmail_sync_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
